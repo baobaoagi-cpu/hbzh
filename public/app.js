@@ -56,39 +56,30 @@
   let micSource = null, micAnalyser = null;
   let isMicActive = false, isMuted = false;
 
-  // Playback — HTMLAudioElement blob queue（MP3 串流相容）
-  let audioChunks = [], audioFlushTimer = null, isPlaying = false, audioQueue = [];
-  let currentBlobUrl = null;
-  const audioEl = new Audio();
-  let playbackWatchdog = null; // 防止 isPlaying 卡住的安全計時器
-  // PC Chrome autoplay policy: user gesture 內觸發一次 play 解鎖
-  // 最短合法 MP3（靜音，173 bytes）
-  const SILENT_MP3 = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRBqJAAAAAAD/+1DEAAAHAAGf9AAAIgAAM/6QABBEAAB0QAAABAIBBkGQdBwfB8Hw';
+  // Playback — 持久 AudioContext（避免手機每句話重置擴音）
+  let audioChunks = [], audioFlushTimer = null, isPlaying = false, audioQueue = []; // queue 存 Blob
+  let playbackWatchdog = null;
+  let audioCtx = null;         // 全程存活的 AudioContext
+  let currentSource = null;    // 目前正在播放的 AudioBufferSourceNode
   let audioUnlocked = false;
+
   function unlockAudio() {
     if (audioUnlocked) return;
-    // 用 user gesture 建立 AudioContext
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state === 'suspended') ctx.resume();
-      const buf = ctx.createBuffer(1, 1, 22050);
-      const src = ctx.createBufferSource();
+      // 建立持久 AudioContext（整通電話共用，保持 audio session 不中斷）
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      // 播一個極短靜音 buffer 完成 user gesture 解鎖
+      const buf = audioCtx.createBuffer(1, 1, 22050);
+      const src = audioCtx.createBufferSource();
       src.buffer = buf;
-      src.connect(ctx.destination);
+      src.connect(audioCtx.destination);
       src.start();
-      src.onended = () => ctx.close();
-    } catch (e) {}
-    // 用靜音 MP3 解鎖 HTMLAudioElement（比空 src + muted 更可靠）
-    audioEl.src = SILENT_MP3;
-    audioEl.play().then(() => {
-      audioEl.pause();
-      audioEl.src = '';
       audioUnlocked = true;
-      console.log('[Audio] Unlock OK');
-    }).catch(() => {
-      audioEl.src = '';
-      console.warn('[Audio] Unlock failed, will retry on connect');
-    });
+      console.log('[Audio] AudioContext unlocked');
+    } catch (e) {
+      console.warn('[Audio] Unlock failed:', e.message);
+    }
   }
 
   // State
@@ -409,9 +400,9 @@
     setActivityState(isMuted ? '' : 'listening');
   }
 
-  // ── Audio Playback — HTMLAudioElement blob queue ──────────────
-  // MP3 chunks → 200ms 批次成 Blob → 依序播放（HTMLAudioElement 天生支援 MP3 串流）
-  // decodeAudioData 不能用：MP3 chunk 不是完整檔案，decode 會產生雜訊/發抖
+  // ── Audio Playback — AudioContext 持久播放 ──────────────
+  // MP3 chunks → 整句合併成 Blob → decodeAudioData → AudioBufferSourceNode 播放
+  // 用同一個 AudioContext 全程不換，手機不會重置擴音/音訊路由
   function playAudioChunk(base64Data) {
     try {
       isProcessing = true;
@@ -419,8 +410,7 @@
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
       audioChunks.push(bytes);
       setActivityState('speaking');
-      // 不再用 200ms timer 切片，等 audio_end 信號整句 flush
-      // 但加 2s 安全 fallback 以防 audio_end 沒到
+      // 等 audio_end 信號整句 flush，2s 安全 fallback
       clearTimeout(audioFlushTimer);
       audioFlushTimer = setTimeout(flushToQueue, 2000);
     } catch (e) { console.warn('[Audio] chunk:', e); }
@@ -430,8 +420,7 @@
     if (audioChunks.length === 0) return;
     const blob = new Blob(audioChunks, { type: 'audio/mpeg' });
     audioChunks = [];
-    const url = URL.createObjectURL(blob);
-    audioQueue.push(url);
+    audioQueue.push(blob); // 存 Blob（不再用 BlobURL）
     if (!isPlaying) playNext();
   }
 
@@ -441,35 +430,43 @@
     if (!isPlaying && audioQueue.length > 0) playNext();
   }
 
-  function playNext() {
+  async function playNext() {
     clearTimeout(playbackWatchdog);
     if (audioQueue.length === 0) {
       isPlaying = false; isProcessing = false;
+      currentSource = null;
       send({ type: 'playback_done' });
       setActivityState('listening');
       return;
     }
     isPlaying = true;
-    const url = audioQueue.shift();
-    if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-    currentBlobUrl = url;
-    audioEl.src = currentBlobUrl;
-    audioEl.play().catch(err => {
-      console.warn('[Audio] play failed, retrying...', err.message);
-      // 100ms 後重試一次（瀏覽器 autoplay 有時第二次就成功）
-      setTimeout(() => {
-        audioEl.play().catch(err2 => {
-          console.warn('[Audio] retry also failed:', err2.message);
-          isPlaying = false; playNext();
-        });
-      }, 100);
-    });
-    audioEl.onended = () => playNext();
-    audioEl.onerror = () => playNext();
-    // ★ Watchdog: 30 秒內沒播完就強制跳下一個（防止 isPlaying 卡住）
+    const blob = audioQueue.shift();
+
+    // 確保 AudioContext 存在且活躍
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    try {
+      const arrayBuf = await blob.arrayBuffer();
+      const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuf;
+      source.connect(audioCtx.destination);
+      currentSource = source;
+      source.onended = () => { currentSource = null; playNext(); };
+      source.start();
+    } catch (e) {
+      console.warn('[Audio] decode/play error:', e.message);
+      currentSource = null;
+      playNext(); // 跳過這句，播下一句
+      return;
+    }
+
+    // Watchdog: 30 秒內沒播完就強制跳下一個
     playbackWatchdog = setTimeout(() => {
       console.warn('[Audio] watchdog: force advance');
-      audioEl.pause(); audioEl.src = '';
+      try { if (currentSource) currentSource.stop(); } catch (_) {}
+      currentSource = null;
       playNext();
     }, 30000);
   }
@@ -511,10 +508,9 @@
         } else if (msg.type === 'tts_end') {
           isTtsActive = false;
         } else if (msg.type === 'interrupt') {
-          // OpenAI 偵測到用戶插嘴 → 立即停止播放
-          audioEl.pause(); audioEl.src = '';
-          if (currentBlobUrl) { URL.revokeObjectURL(currentBlobUrl); currentBlobUrl = null; }
-          for (const url of audioQueue) URL.revokeObjectURL(url);
+          // 用戶插嘴 → 立即停止播放
+          try { if (currentSource) currentSource.stop(); } catch (_) {}
+          currentSource = null;
           audioQueue = []; audioChunks = [];
           clearTimeout(audioFlushTimer);
           clearTimeout(playbackWatchdog);
