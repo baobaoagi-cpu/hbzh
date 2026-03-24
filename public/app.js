@@ -338,8 +338,8 @@
         // 動態噪音底板計算
         let sum = 0; for (let i = 0; i < f32.length; i++) sum += f32[i]*f32[i];
         const rms = Math.sqrt(sum / f32.length);
-        // ★ TTS 播放中提高 VAD 門檻（3.5x），只讓大聲人聲通過，過濾揚聲器回音
-        const vadMultiplier = (isPlaying || isTtsActive) ? 3.5 : 1.0;
+        // ★ TTS 播放中提高 VAD 門檻（2.5x），大聲說話即可打斷
+        const vadMultiplier = (isPlaying || isTtsActive) ? 2.5 : 1.0;
         const dynamicThreshold = Math.max(VAD_THRESHOLD_MIN, noiseFloor * 2.0) * vadMultiplier;
 
         // ★ 噪音閘門：低於門檻 → 送靜音（擋掉背景影片/電視系統音）
