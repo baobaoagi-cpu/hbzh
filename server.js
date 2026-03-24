@@ -53,7 +53,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const DEEPGRAM_API_KEY  = process.env.DEEPGRAM_API_KEY  || '';
 const MINIMAX_API_KEY   = process.env.MINIMAX_API_KEY    || '';
 const MINIMAX_GROUP_ID  = process.env.MINIMAX_GROUP_ID   || '';
-const MINIMAX_VOICE_ID  = process.env.MINIMAX_VOICE_ID   || 'moss_audio_fd2ef298-22b7-11f1-b6e4-f657e22e7889';
+const MINIMAX_VOICE_ID  = process.env.MINIMAX_VOICE_ID   || 'moss_audio_7a1ada8b-22d3-11f1-9b14-6299e7260fda';
 
 // Deepgram streaming endpoint
 const DG_BASE_URL = 'wss://api.deepgram.com/v1/listen';

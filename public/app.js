@@ -609,10 +609,8 @@
   });
   if (btnMute) btnMute.addEventListener('click', toggleMute);
   btnSendText.addEventListener('click', () => {
-    if (isProcessing) return;
     const text = window.prompt('輸入訊息：','');
     if (!text?.trim()) return;
-    isProcessing = true;
     addTranscript('user', text.trim());
     send({ type: 'text', text: text.trim() });
     setActivityState('thinking');
