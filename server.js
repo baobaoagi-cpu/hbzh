@@ -540,6 +540,7 @@ async function triggerClaudeResponse(ws, callerName, userText) {
     const stream = anthropic.messages.stream({
       model: CLAUDE_MODEL,
       max_tokens: 300,
+      thinking: { type: 'disabled' },
       system: systemPrompt,
       messages,
     }, {
