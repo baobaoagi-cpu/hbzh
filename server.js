@@ -30,7 +30,6 @@ import { join, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
-import fetch from 'node-fetch';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const __dirname  = fileURLToPath(new URL('.', import.meta.url));
@@ -77,7 +76,7 @@ const EMOTION_MAP = { whisper: 'calm' };
 
 // ── Anthropic client ─────────────────────────────────────────────────────
 const anthropic = ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY, fetch })
+  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY })
   : null;
 
 // ── 元記憶（河北彩花人格核心）──────────────────────────────────────────────
@@ -890,7 +889,7 @@ wss.on('connection', (ws, req) => {
 
 // ── Start ──────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
-  console.log(`\n🎙 河北彩花 語音通話 v15 → http://localhost:${PORT}`);
+  console.log(`\n🎙 河北彩花 語音通話 v15 → http://localhost:${PORT}  [Node ${process.version}]`);
   console.log('ANTHROPIC:', ANTHROPIC_API_KEY ? '✅' : '❌  ← 必填！');
   console.log('DEEPGRAM:',  DEEPGRAM_API_KEY  ? '✅' : '❌  ← 必填！');
   console.log('MINIMAX:',   MINIMAX_API_KEY   ? '✅' : '❌  ← 必填！');
