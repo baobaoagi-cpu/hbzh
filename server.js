@@ -537,6 +537,7 @@ async function triggerClaudeResponse(ws, callerName, userText) {
     const messages = getHistory(callerName).map(h => ({ role: h.role, content: h.content }));
 
     console.log('[Claude] Streaming for', callerName, '(', messages.length, 'msgs)');
+    console.log('[Claude] Model:', CLAUDE_MODEL, 'SDK:', Anthropic.VERSION || 'unknown');
 
     const stream = anthropic.messages.stream({
       model: CLAUDE_MODEL,
@@ -591,6 +592,7 @@ async function triggerClaudeResponse(ws, callerName, userText) {
     }
 
     console.error('[Claude] Error:', err.message, err.status || '');
+    console.error('[Claude] Stack:', err.stack);
 
     let userMessage;
     if (err.status === 429) {
