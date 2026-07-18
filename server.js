@@ -30,6 +30,7 @@ import { join, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
+import fetch from 'node-fetch';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const __dirname  = fileURLToPath(new URL('.', import.meta.url));
@@ -76,7 +77,7 @@ const EMOTION_MAP = { whisper: 'calm' };
 
 // ── Anthropic client ─────────────────────────────────────────────────────
 const anthropic = ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+  ? new Anthropic({ apiKey: ANTHROPIC_API_KEY, fetch })
   : null;
 
 // ── 元記憶（河北彩花人格核心）──────────────────────────────────────────────
