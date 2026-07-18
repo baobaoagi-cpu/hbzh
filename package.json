@@ -9,7 +9,7 @@
     "dev": "node --watch server.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.112.3",
     "chinese-conv": "^4.0.0",
     "dotenv": "^16.4.5",
     "node-fetch": "^3.3.2",
